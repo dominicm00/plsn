@@ -4,13 +4,13 @@ from typing import Self
 
 import numpy as np
 
-from lattice_nets.core.neuron import Neuron
-from lattice_nets.core.network import LatticeNetwork
-from lattice_nets.init.positions import (
+from plsn.core.neuron import Neuron
+from plsn.core.network import LatticeNetwork
+from plsn.init.positions import (
     PositionInitializer,
     LatticePositionInitializer,
 )
-from lattice_nets.init.connections import ConnectionInitializer
+from plsn.init.connections import ConnectionInitializer
 
 class NetworkBuilder:
     """Fluent builder for constructing LatticeNetwork instances.

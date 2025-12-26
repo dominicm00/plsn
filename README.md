@@ -1,4 +1,4 @@
-# Lattice Neural Networks
+# PLSN (Plastic Local Sparse Network)
 
 A modular neural network architecture where neurons have **spatial positions** and connect based on **distance-dependent probability distributions**.
 
@@ -33,8 +33,8 @@ Band 3 ──►│  (mixing)       │──► Band 3
 ## Quick Start
 
 ```python
-from lattice_nets import NetworkBuilder
-from lattice_nets.init import DistanceBasedInitializer, LinearDistribution
+from plsn import NetworkBuilder
+from plsn.init import DistanceBasedInitializer, LinearDistribution
 
 network = (
     NetworkBuilder()
@@ -57,7 +57,7 @@ The architecture uses Python Protocols for modularity:
 
 ### Position Initializers
 ```python
-from lattice_nets.init import LatticePositionInitializer, RandomPositionInitializer
+from plsn.init import LatticePositionInitializer, RandomPositionInitializer
 
 # Even grid distribution (default)
 LatticePositionInitializer()
@@ -68,7 +68,7 @@ RandomPositionInitializer(low=0.0, high=1.0, seed=42)
 
 ### Distance Distributions
 ```python
-from lattice_nets.init import (
+from plsn.init import (
     LinearDistribution,      # P(d) = 1 - d
     ExponentialDistribution, # P(d) = exp(-λd)
     GaussianDistribution,    # P(d) = exp(-d²/2σ²)
@@ -78,7 +78,7 @@ from lattice_nets.init import (
 
 ### Connection Initializers
 ```python
-from lattice_nets.init import DistanceBasedInitializer
+from plsn.init import DistanceBasedInitializer
 
 DistanceBasedInitializer(
     distribution=LinearDistribution(),
@@ -93,7 +93,7 @@ DistanceBasedInitializer(
 ## Project Structure
 
 ```
-lattice_nets/
+plsn/
 ├── __init__.py           # Main exports
 ├── builder.py            # Fluent NetworkBuilder API
 ├── core/

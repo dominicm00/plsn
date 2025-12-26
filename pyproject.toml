@@ -1,7 +1,7 @@
 [project]
-name = "lattice-nets"
+name = "plsn"
 version = "0.1.0"
-description = "Add your description here"
+description = "Plastic Local Sparse Network - A modular neural network architecture with spatial connectivity"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

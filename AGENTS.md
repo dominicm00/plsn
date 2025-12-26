@@ -38,8 +38,8 @@ uv run jupyter lab
 
 | What | Where |
 |------|-------|
-| Neuron class | `lattice_nets/core/neuron.py` |
-| Network class | `lattice_nets/core/network.py` |
-| Builder | `lattice_nets/builder.py` |
-| Initializers | `lattice_nets/init/` |
+| Neuron class | `plsn/core/neuron.py` |
+| Network class | `plsn/core/network.py` |
+| Builder | `plsn/builder.py` |
+| Initializers | `plsn/init/` |
 | Examples | `visualizations.ipynb` |

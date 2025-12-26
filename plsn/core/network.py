@@ -5,7 +5,7 @@ from typing import Iterator
 
 import numpy as np
 
-from lattice_nets.core.neuron import Neuron
+from plsn.core.neuron import Neuron
 
 
 @dataclass

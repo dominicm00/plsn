@@ -4,8 +4,8 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
-from lattice_nets.core.network import LatticeNetwork
-from lattice_nets.init.distributions import DistanceDistribution, LinearDistribution
+from plsn.core.network import LatticeNetwork
+from plsn.init.distributions import DistanceDistribution, LinearDistribution
 
 
 @runtime_checkable

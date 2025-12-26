@@ -1,18 +1,18 @@
 """Initialization strategies for lattice neural networks."""
 
-from lattice_nets.init.positions import (
+from plsn.init.positions import (
     PositionInitializer,
     LatticePositionInitializer,
     RandomPositionInitializer,
 )
-from lattice_nets.init.distributions import (
+from plsn.init.distributions import (
     DistanceDistribution,
     LinearDistribution,
     ExponentialDistribution,
     GaussianDistribution,
     StepDistribution,
 )
-from lattice_nets.init.connections import (
+from plsn.init.connections import (
     ConnectionInitializer,
     DistanceBasedInitializer,
 )

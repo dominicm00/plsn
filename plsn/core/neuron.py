@@ -9,16 +9,14 @@ import numpy as np
 @dataclass
 class Neuron:
     """A neuron with a spatial position and internal band mixing.
-    
+
     Attributes:
         position: d-dimensional position vector in space.
-        is_global: Whether this is a global neuron (vs local).
         num_bands: Number of signal bands this neuron processes.
         band_weights: Internal B×B weight matrix for mixing bands.
                      Initialized to identity (bands pass through unchanged).
     """
     position: np.ndarray
-    is_global: bool = False
     num_bands: int = 1
     band_weights: np.ndarray = field(init=False)
     
@@ -60,5 +58,4 @@ class Neuron:
     
     def __repr__(self) -> str:
         pos_str = np.array2string(self.position, precision=2, separator=', ')
-        neuron_type = "global" if self.is_global else "local"
-        return f"Neuron(pos={pos_str}, {neuron_type}, bands={self.num_bands})"
+        return f"Neuron(pos={pos_str}, bands={self.num_bands})"

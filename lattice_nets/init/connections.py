@@ -60,17 +60,16 @@ class DistanceBasedInitializer:
         """Create connections based on distance probabilities.
         
         For each pair of neurons, computes the probability of connection
-        based on their distance (normalized by max network distance),
-        then randomly creates the connection with that probability.
+        based on their distance, then randomly creates the connection
+        with that probability.
+        
+        Note: Distances are passed directly to the distribution (not normalized).
+        With the default positioning where neurons are ~1 unit apart, distribution
+        parameters (like sigma) represent absolute distances.
         """
         n = network.num_neurons
         if n == 0:
             return
-        
-        # Compute max distance for normalization
-        max_dist = network.max_distance(ord=self.ord)
-        if max_dist == 0:
-            max_dist = 1.0  # Avoid division by zero
         
         # For each pair, compute probability and potentially connect
         for i in range(n):
@@ -79,14 +78,13 @@ class DistanceBasedInitializer:
                 if i == j and not self.self_connections:
                     continue
                 
-                # Compute normalized distance
+                # Compute distance (not normalized - distributions work with absolute distances)
                 dist = network.neurons[i].distance_to(
                     network.neurons[j], ord=self.ord
                 )
-                normalized_dist = dist / max_dist
                 
                 # Get probability and roll the dice
-                prob = self.distribution.probability(normalized_dist)
+                prob = self.distribution.probability(dist)
                 
                 if self.rng.random() < prob:
                     network.connect(i, j, self.initial_weight)

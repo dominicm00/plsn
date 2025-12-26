@@ -10,15 +10,21 @@ import numpy as np
 class DistanceDistribution(Protocol):
     """Protocol for distance-to-probability distributions.
     
-    Maps normalized distance (0 to 1) to connection probability (0 to 1).
+    Maps distance (in the same units as neuron positioning) to
+    connection probability (0 to 1).
+    
+    With the default positioning where neurons are ~1 unit apart,
+    distance values represent intuitive spacing:
+    - distance = 1.0 means adjacent neurons in a lattice
+    - distance = 2.0 means two steps apart
     """
     
-    def probability(self, normalized_distance: float) -> float:
+    def probability(self, distance: float) -> float:
         """Compute connection probability for a given distance.
         
         Args:
-            normalized_distance: Distance normalized to [0, 1] range,
-                                 where 0 is closest and 1 is max distance.
+            distance: Absolute distance between neurons. With default
+                      positioning, 1.0 = adjacent neurons.
             
         Returns:
             Probability of connection in [0, 1].
@@ -27,49 +33,42 @@ class DistanceDistribution(Protocol):
 
 
 class LinearDistribution:
-    """Linear interpolation from high probability at distance=0 to low at distance=1.
+    """Linear interpolation of connection probability based on distance.
     
-    P(d) = high - (high - low) * d
+    P(d) = max(0, 1 - d / max_distance)
     
-    Default: (0, 1) -> (1, 0) meaning close neurons always connect,
-    far neurons never connect.
+    Probability is 1.0 at distance=0 and decreases linearly to 0
+    at max_distance.
     
     Args:
-        prob_at_zero: Probability when distance is 0 (closest).
-        prob_at_max: Probability when distance is max (farthest).
+        max_distance: Distance at which probability becomes 0.
+                      Default: 3.0 (covers ~3 neuron spacings).
     """
     
-    def __init__(
-        self,
-        prob_at_zero: float = 1.0,
-        prob_at_max: float = 0.0,
-    ) -> None:
-        self.prob_at_zero = prob_at_zero
-        self.prob_at_max = prob_at_max
+    def __init__(self, max_distance: float = 3.0) -> None:
+        self.max_distance = max_distance
     
-    def probability(self, normalized_distance: float) -> float:
-        """Linear interpolation between endpoints."""
-        d = np.clip(normalized_distance, 0.0, 1.0)
-        return self.prob_at_zero - (self.prob_at_zero - self.prob_at_max) * d
+    def probability(self, distance: float) -> float:
+        """Linear falloff of probability with distance."""
+        return max(0.0, 1.0 - distance / self.max_distance)
 
 
 class ExponentialDistribution:
     """Exponential decay of connection probability with distance.
     
-    P(d) = exp(-decay * d)
+    P(d) = exp(-d / scale)
     
     Args:
-        decay: Decay rate. Higher values = faster falloff.
-               decay=3 means P(1) ≈ 0.05
+        scale: Characteristic distance scale. Probability drops to ~37%
+               at distance=scale. Default: 1.0 (matches neuron spacing).
     """
     
-    def __init__(self, decay: float = 3.0) -> None:
-        self.decay = decay
+    def __init__(self, scale: float = 1.0) -> None:
+        self.scale = scale
     
-    def probability(self, normalized_distance: float) -> float:
+    def probability(self, distance: float) -> float:
         """Exponential decay."""
-        d = np.clip(normalized_distance, 0.0, 1.0)
-        return float(np.exp(-self.decay * d))
+        return float(np.exp(-distance / self.scale))
 
 
 class GaussianDistribution:
@@ -78,17 +77,17 @@ class GaussianDistribution:
     P(d) = exp(-d² / (2 * sigma²))
     
     Args:
-        sigma: Standard deviation of the Gaussian.
-               sigma=0.3 means ~95% of probability is within d=0.6.
+        sigma: Standard deviation of the Gaussian. ~68% of connections
+               are within distance=sigma, ~95% within distance=2*sigma.
+               Default: 1.5 (covers ~1.5 neuron spacings for most connections).
     """
     
-    def __init__(self, sigma: float = 0.3) -> None:
+    def __init__(self, sigma: float = 1.5) -> None:
         self.sigma = sigma
     
-    def probability(self, normalized_distance: float) -> float:
+    def probability(self, distance: float) -> float:
         """Gaussian falloff."""
-        d = np.clip(normalized_distance, 0.0, 1.0)
-        return float(np.exp(-d**2 / (2 * self.sigma**2)))
+        return float(np.exp(-distance**2 / (2 * self.sigma**2)))
 
 
 class StepDistribution:
@@ -97,12 +96,13 @@ class StepDistribution:
     P(d) = 1 if d < threshold else 0
     
     Args:
-        threshold: Normalized distance threshold for connection.
+        threshold: Maximum distance for connection.
+                   Default: 2.0 (connect to neurons within 2 spacings).
     """
     
-    def __init__(self, threshold: float = 0.5) -> None:
+    def __init__(self, threshold: float = 2.0) -> None:
         self.threshold = threshold
     
-    def probability(self, normalized_distance: float) -> float:
+    def probability(self, distance: float) -> float:
         """Step function."""
-        return 1.0 if normalized_distance < self.threshold else 0.0
+        return 1.0 if distance < self.threshold else 0.0

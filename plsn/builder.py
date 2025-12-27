@@ -7,6 +7,7 @@ import numpy as np
 
 from plsn.core.neuron import Neuron
 from plsn.core.network import LatticeNetwork, NeuronRanges
+from plsn.core.learning import HebbianConfig
 from plsn.init.positions import (
     PositionInitializer,
     LatticePositionInitializer,
@@ -71,6 +72,7 @@ class NetworkBuilder:
         self._output_config: LayerConfig | None = None
         self._seed: int | None = None
         self._activation: Callable[[np.float32], np.float32] | None = None
+        self._learning_config: HebbianConfig | None = None
     
     def with_dimensions(self, dims: int) -> Self:
         """Set the dimensionality of the neuron position space."""
@@ -157,14 +159,44 @@ class NetworkBuilder:
         self, activation: Callable[[np.float32], np.float32]
     ) -> Self:
         """Set the activation function for the network.
-        
+
         Args:
             activation: A callable that takes a float and returns a float.
                        The network will map this function over the state element-wise.
         """
         self._activation = activation
         return self
-    
+
+    def with_learning(
+        self,
+        config: HebbianConfig | None = None,
+        learning_rate: float = 0.01,
+        band_learning_rate: float = 0.01,
+        bcm_tau: float = 100.0,
+        theta_init: float = 0.5,
+    ) -> Self:
+        """Configure Hebbian learning for the network.
+
+        Uses Oja-BCM combined rule for both connection weights and band weights.
+
+        Args:
+            config: Full HebbianConfig object (overrides other args if provided).
+            learning_rate: Learning rate for connection weights.
+            band_learning_rate: Learning rate for band mixing weights.
+            bcm_tau: BCM threshold time constant.
+            theta_init: Initial BCM threshold.
+        """
+        if config is not None:
+            self._learning_config = config
+        else:
+            self._learning_config = HebbianConfig(
+                learning_rate=learning_rate,
+                band_learning_rate=band_learning_rate,
+                bcm_tau=bcm_tau,
+                theta_init=theta_init,
+            )
+        return self
+
     def build(self) -> LatticeNetwork:
         """Construct the network with all configured parameters.
 
@@ -189,7 +221,7 @@ class NetworkBuilder:
                 self._input_config.num_neurons, self._dimensions, pos_rng
             )
             for pos in input_positions:
-                neurons.append(Neuron(position=pos, num_bands=self._num_bands))
+                neurons.append(Neuron(position=pos))
 
         # Create model neurons
         pos_rng = rng.spawn(1)[0]
@@ -197,7 +229,7 @@ class NetworkBuilder:
             num_model, self._dimensions, pos_rng
         )
         for pos in model_positions:
-            neurons.append(Neuron(position=pos, num_bands=self._num_bands))
+            neurons.append(Neuron(position=pos))
 
         # Create output neurons last
         if self._output_config:
@@ -206,7 +238,7 @@ class NetworkBuilder:
                 self._output_config.num_neurons, self._dimensions, pos_rng
             )
             for pos in output_positions:
-                neurons.append(Neuron(position=pos, num_bands=self._num_bands))
+                neurons.append(Neuron(position=pos))
 
         ranges = NeuronRanges(
             input_start=0,
@@ -222,6 +254,7 @@ class NetworkBuilder:
             num_bands=self._num_bands,
             ranges=ranges,
             activation=self._activation,
+            learning_config=self._learning_config,
         )
 
         # Model-to-model connections

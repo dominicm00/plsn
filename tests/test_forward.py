@@ -10,19 +10,19 @@ from plsn.builder import NetworkBuilder
 def _forward_reference(net) -> np.ndarray:
     """Reference implementation matching the pre-vectorization behavior."""
     weights_csr = csr_array(net.weights)
-    
+
     weighted_inputs = weights_csr.T @ net.state  # (n, b)
 
     out = np.zeros((net.num_neurons, net.num_bands), dtype=np.float32)
-    for j, neuron in enumerate(net.neurons):
-        out[j] = neuron.process_bands(weighted_inputs[j])
-    
+    for j in range(net.num_neurons):
+        out[j] = net.band_weights[j] @ weighted_inputs[j]
+
     # helper to match default relu activation
     np.maximum(out, 0, out=out)
-    
+
     if net.num_inputs > 0:
         out[net.ranges.input_slice] = net.state[net.ranges.input_slice]
-    
+
     return out
 
 
@@ -41,9 +41,9 @@ def test_forward_matches_reference() -> None:
         j = (i + 1) % net.num_neurons
         net.connect(i, j, weight=float(rng.normal()))
 
-    for i, neuron in enumerate(net.neurons):
+    for i in range(net.num_neurons):
         local_rng = np.random.default_rng(i + 123)
-        neuron.band_weights = local_rng.normal(
+        net.band_weights[i] = local_rng.normal(
             size=(net.num_bands, net.num_bands)
         ).astype(np.float32)
 

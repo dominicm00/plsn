@@ -27,10 +27,8 @@ def test_custom_activation():
         .with_model_initializer(neurons=5)
         .with_activation(custom_activation)
         .build())
-    
-    assert network.activation == custom_activation
-    
-    # Test mapping behavior implicitly by running forward? 
-    # Or just test function
+
+    # Test that custom activation behavior is preserved (identity function)
     assert network.activation(-1.0) == -1.0
+    assert network.activation(5.0) == 5.0
 

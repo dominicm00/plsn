@@ -22,6 +22,7 @@ class HebbianConfig:
     Attributes:
         learning_rate: Learning rate for connection weights. Default 0.01.
         band_learning_rate: Learning rate for band mixing weights. Default 0.01.
+        output_learning_rate: Learning rate for output mixing weights. Default 0.01.
         bcm_tau: Time constant for BCM threshold adaptation.
                  Higher values = slower adaptation. Default 100.0.
         theta_init: Initial BCM threshold value. Default 0.5.
@@ -31,6 +32,7 @@ class HebbianConfig:
     """
     learning_rate: float = 0.01
     band_learning_rate: float = 0.01
+    output_learning_rate: float = 0.01
     bcm_tau: float = 100.0
     theta_init: float = 0.5
     weight_decay: float = 0.0

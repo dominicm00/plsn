@@ -420,6 +420,37 @@ class LatticeNetwork:
             w + dw, cfg.min_weight, cfg.max_weight
         ).astype(np.float32)
 
+        # === Learn output weights ===
+        # Output weights: (num_outputs, num_bands) mixing bands to scalar outputs
+        if self.ranges.num_outputs > 0:
+            # Get output neuron activations and BCM thresholds
+            out_state = post_state[self.ranges.output_slice]  # (num_outputs, num_bands)
+            out_theta = self.bcm_theta[self.ranges.output_slice]  # (num_outputs,)
+
+            # Compute scalar output (y) by mixing bands
+            y_out = (out_state * self.output_weights).sum(axis=1)  # (num_outputs,)
+
+            # BCM factor: y * (y - theta)
+            bcm_out = y_out * (y_out - out_theta)  # (num_outputs,)
+
+            # Reshape for broadcasting: (num_outputs, 1)
+            y_exp = y_out[:, None]
+            bcm_exp = bcm_out[:, None]
+
+            # Oja-BCM: dw = eta * reward * y * bcm * (x - y * w)
+            # x = out_state (per-band activations), w = output_weights
+            oja_term = out_state - y_exp * self.output_weights  # (num_outputs, num_bands)
+            dw = cfg.output_learning_rate * reward * y_exp * bcm_exp * oja_term
+
+            # Weight decay
+            if cfg.weight_decay > 0:
+                dw -= cfg.weight_decay * self.output_weights
+
+            # Apply update and clip
+            self.output_weights = np.clip(
+                self.output_weights + dw, cfg.min_weight, cfg.max_weight
+            ).astype(np.float32)
+
     def forward(self) -> np.ndarray:
         """Forward pass through the network.
 

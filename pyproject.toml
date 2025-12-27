@@ -3,11 +3,24 @@ name = "plsn"
 version = "0.1.0"
 description = "Plastic Local Sparse Network - A modular neural network architecture with spatial connectivity"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
-    "ipykernel>=7.1.0",
-    "jupyterlab>=4.5.1",
-    "matplotlib>=3.10.8",
-    "numpy>=2.4.0",
-    "scipy>=1.16.3",
+    "numpy>=1.26",
+    "scipy>=1.10",
 ]
+
+[project.optional-dependencies]
+# Local notebook/dev tooling (not required for using the library in Colab).
+notebook = [
+    "ipykernel>=6.29",
+    "jupyterlab>=4.0",
+    "matplotlib>=3.7",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["plsn*"]

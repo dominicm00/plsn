@@ -103,19 +103,29 @@ plsn/
 ## Setup
 
 1. Install `uv`:
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
 2. Install dependencies:
-   ```bash
-   uv sync
-   ```
+```bash
+uv sync
+```
 
 3. Start Jupyter Lab:
-   ```bash
-   uv run jupyter lab
-   ```
+```bash
+uv run jupyter lab
+```
+
+## Google Colab
+
+Colab can’t import local modules unless you either install the project or add the repo to `sys.path`. The most reliable approach is to clone the repo and install it via the following cell:
+
+```python
+!git clone https://github.com/dominicm00/plsn.git
+%cd plsn
+!pip install -e .
+```
 
 ## Files
 

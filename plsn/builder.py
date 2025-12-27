@@ -45,14 +45,22 @@ class NetworkBuilder:
                 position=LatticePositionInitializer(),
                 connections=[FullyConnectedInitializer()]
             )
+            .with_output_initializer(
+                neurons=2,
+                position=LatticePositionInitializer(),
+                connections=[FullyConnectedInitializer()]
+            )
             .build())
 
-    Input neurons are placed first in the network (indices 0 to num_inputs-1),
-    followed by model neurons (indices num_inputs to num_neurons-1).
-    
+    Neuron layout: [inputs | model | outputs]
+    - Input neurons: indices 0 to num_inputs-1
+    - Model neurons: indices num_inputs to num_inputs+num_model-1
+    - Output neurons: indices num_inputs+num_model to total-1
+
     Connection initializers are applied to the full network:
-    - Input connection initializers typically create input->model connections
-    - Model connection initializers typically create model->model connections
+    - Input connection initializers create input->model connections
+    - Model connection initializers create model->model connections
+    - Output connection initializers create model->output connections
     """
     
     def __init__(self) -> None:
@@ -60,6 +68,7 @@ class NetworkBuilder:
         self._num_bands: int = 1
         self._model_config: LayerConfig | None = None
         self._input_config: LayerConfig | None = None
+        self._output_config: LayerConfig | None = None
         self._seed: int | None = None
     
     def with_dimensions(self, dims: int) -> Self:
@@ -99,9 +108,9 @@ class NetworkBuilder:
         connections: list[ConnectionInitializer] | None = None,
     ) -> Self:
         """Configure input neuron initialization.
-        
+
         Input neurons have fixed values and their outputs connect to model neurons.
-        
+
         Args:
             neurons: Number of input neurons.
             position: Position initialization strategy.
@@ -113,7 +122,31 @@ class NetworkBuilder:
             connection_inits=connections or [],
         )
         return self
-    
+
+    def with_output_initializer(
+        self,
+        neurons: int,
+        position: PositionInitializer | None = None,
+        connections: list[ConnectionInitializer] | None = None,
+    ) -> Self:
+        """Configure output neuron initialization.
+
+        Output neurons receive connections from model neurons and produce the
+        network's output. Each output neuron has learnable weights that mix its
+        bands down to a single scalar value.
+
+        Args:
+            neurons: Number of output neurons.
+            position: Position initialization strategy.
+            connections: Connection initialization strategies for model-to-output connections.
+        """
+        self._output_config = LayerConfig(
+            num_neurons=neurons,
+            position_init=position or LatticePositionInitializer(),
+            connection_inits=connections or [],
+        )
+        return self
+
     def with_seed(self, seed: int) -> Self:
         """Set random seed for reproducibility."""
         self._seed = seed
@@ -127,14 +160,16 @@ class NetworkBuilder:
         """
         if self._model_config is None:
             self._model_config = LayerConfig()
-        
+
         rng = np.random.default_rng(self._seed)
-        
+
         num_inputs = self._input_config.num_neurons if self._input_config else 0
         num_model = self._model_config.num_neurons
-        
+        num_outputs = self._output_config.num_neurons if self._output_config else 0
+
         neurons: list[Neuron] = []
-        
+
+        # Create input neurons first
         if self._input_config:
             pos_rng = rng.spawn(1)[0]
             input_positions = self._input_config.position_init.initialize(
@@ -142,34 +177,54 @@ class NetworkBuilder:
             )
             for pos in input_positions:
                 neurons.append(Neuron(position=pos, num_bands=self._num_bands))
-        
+
+        # Create model neurons
         pos_rng = rng.spawn(1)[0]
         model_positions = self._model_config.position_init.initialize(
             num_model, self._dimensions, pos_rng
         )
         for pos in model_positions:
             neurons.append(Neuron(position=pos, num_bands=self._num_bands))
-        
+
+        # Create output neurons last
+        if self._output_config:
+            pos_rng = rng.spawn(1)[0]
+            output_positions = self._output_config.position_init.initialize(
+                self._output_config.num_neurons, self._dimensions, pos_rng
+            )
+            for pos in output_positions:
+                neurons.append(Neuron(position=pos, num_bands=self._num_bands))
+
         ranges = NeuronRanges(
             input_start=0,
             input_end=num_inputs,
             model_start=num_inputs,
             model_end=num_inputs + num_model,
+            output_start=num_inputs + num_model,
+            output_end=num_inputs + num_model + num_outputs,
         )
-        
+
         network = LatticeNetwork(
             neurons=neurons,
             num_bands=self._num_bands,
             ranges=ranges,
         )
-        
+
+        # Model-to-model connections
         conn_rngs = rng.spawn(len(self._model_config.connection_inits))
         for init, conn_rng in zip(self._model_config.connection_inits, conn_rngs):
             init.initialize(network, conn_rng, ranges.model_range, ranges.model_range)
 
+        # Input-to-model connections
         if self._input_config:
             input_conn_rngs = rng.spawn(len(self._input_config.connection_inits))
             for init, conn_rng in zip(self._input_config.connection_inits, input_conn_rngs):
                 init.initialize(network, conn_rng, ranges.input_range, ranges.model_range)
-        
+
+        # Model-to-output connections
+        if self._output_config:
+            output_conn_rngs = rng.spawn(len(self._output_config.connection_inits))
+            for init, conn_rng in zip(self._output_config.connection_inits, output_conn_rngs):
+                init.initialize(network, conn_rng, ranges.model_range, ranges.output_range)
+
         return network

@@ -1,3 +1,6 @@
+from plsn.init.distributions.distance import StepDistanceDistribution
+from plsn.init.connections import DistanceBasedInitializer
+from plsn.init.positions import LatticePositionInitializer
 import numpy as np
 from scipy.sparse import csr_array
 
@@ -53,8 +56,16 @@ def test_forward_matches_reference() -> None:
 def test_forward_with_input_neurons() -> None:
     net = (
         NetworkBuilder()
-        .with_model_initializer(neurons=6)
-        .with_input_initializer(neurons=4)
+        .with_model_initializer(
+            neurons=6,
+            position=LatticePositionInitializer(),
+            connections=[DistanceBasedInitializer(StepDistanceDistribution(4))],
+        )
+        .with_input_initializer(
+            neurons=4,
+            position=LatticePositionInitializer(),
+            connections=[DistanceBasedInitializer(StepDistanceDistribution(4))],
+        )
         .with_dimensions(2)
         .with_bands(3)
         .with_seed(42)
@@ -64,11 +75,6 @@ def test_forward_with_input_neurons() -> None:
     assert net.num_inputs == 4
     assert net.num_neurons == 10
 
-    rng = np.random.default_rng(42)
-    for i in range(net.num_inputs):
-        for j in range(net.num_inputs, net.num_neurons):
-            net.connect(i, j, weight=float(rng.normal()))
-    
     input_values = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
     net.set_input(input_values)
     
@@ -89,9 +95,93 @@ def test_set_input_validates_shape() -> None:
         .with_seed(42)
         .build()
     )
-    
+
     try:
         net.set_input(np.array([1.0, 2.0, 3.0]))
         assert False, "Expected ValueError"
     except ValueError as e:
         assert "Expected input shape (2,)" in str(e)
+
+
+def test_forward_with_output_neurons() -> None:
+    net = (
+        NetworkBuilder()
+        .with_model_initializer(neurons=4)
+        .with_output_initializer(neurons=2)
+        .with_dimensions(2)
+        .with_bands(3)
+        .with_seed(42)
+        .build()
+    )
+
+    assert net.num_outputs == 2
+    assert net.num_neurons == 6
+    assert net.output_weights.shape == (2, 3)
+
+    rng = np.random.default_rng(42)
+    for i in range(4):
+        for j in range(4, 6):
+            net.connect(i, j, weight=float(rng.normal()))
+
+    net.state = rng.normal(size=(net.num_neurons, net.num_bands)).astype(np.float32)
+
+    output = net.forward()
+
+    assert output.shape == (2,)
+    assert output.dtype == np.float32
+
+
+def test_output_weights_affect_output() -> None:
+    net = (
+        NetworkBuilder()
+        .with_model_initializer(neurons=2)
+        .with_output_initializer(neurons=1)
+        .with_dimensions(2)
+        .with_bands(3)
+        .with_seed(42)
+        .build()
+    )
+
+    for i in range(2):
+        net.connect(i, 2, weight=1.0)
+
+    net.state = np.ones((3, 3), dtype=np.float32)
+
+    output1 = net.forward()
+
+    net.output_weights = np.array([[2.0, 2.0, 2.0]], dtype=np.float32)
+    net.state = np.ones((3, 3), dtype=np.float32)
+
+    output2 = net.forward()
+
+    np.testing.assert_allclose(output2, output1 * 2)
+
+
+def test_forward_returns_empty_without_output_neurons() -> None:
+    net = (
+        NetworkBuilder()
+        .with_model_initializer(neurons=4)
+        .with_seed(42)
+        .build()
+    )
+
+    output = net.forward()
+
+    assert output.shape == (0,)
+    assert output.dtype == np.float32
+
+
+def test_cannot_connect_from_output_neuron() -> None:
+    net = (
+        NetworkBuilder()
+        .with_model_initializer(neurons=2)
+        .with_output_initializer(neurons=2)
+        .with_seed(42)
+        .build()
+    )
+
+    try:
+        net.connect(2, 0)
+        assert False, "Expected AssertionError"
+    except AssertionError as e:
+        assert "Cannot connect from output neuron" in str(e)

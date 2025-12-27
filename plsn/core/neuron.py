@@ -22,7 +22,7 @@ class Neuron:
     
     def __post_init__(self) -> None:
         """Initialize band mixing weights to identity matrix."""
-        self.band_weights = np.eye(self.num_bands, dtype=np.float64)
+        self.band_weights = np.eye(self.num_bands, dtype=np.float32)
     
     @property
     def dimensions(self) -> int:

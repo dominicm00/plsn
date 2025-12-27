@@ -66,7 +66,7 @@ class LatticePositionInitializer:
         positions = np.stack([g.ravel() for g in grids], axis=1)
         
         # Take only the first num_neurons positions
-        return positions[:num_neurons].astype(np.float64)
+        return positions[:num_neurons].astype(np.float32)
 
 
 class RandomPositionInitializer:
@@ -117,4 +117,4 @@ class RandomPositionInitializer:
         
         return self.rng.uniform(
             self.low, self.low + size, size=(num_neurons, dimensions)
-        ).astype(np.float64)
+        ).astype(np.float32)

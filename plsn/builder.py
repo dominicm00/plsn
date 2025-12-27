@@ -14,7 +14,7 @@ from plsn.init.connections import ConnectionInitializer
 
 class NetworkBuilder:
     """Fluent builder for constructing LatticeNetwork instances.
-    
+
     Example:
         network = (NetworkBuilder()
             .with_dimensions(2)
@@ -24,16 +24,20 @@ class NetworkBuilder:
             .with_connection_initializer(
                 DistanceBasedInitializer(LinearDistribution())
             )
+            .with_connection_initializer(
+                GlobalInitializer(probability=0.01)
+            )
             .build())
+
+    Multiple connection initializers can be added and will be applied in order.
     """
     
     def __init__(self) -> None:
         self._num_neurons: int = 16
         self._dimensions: int = 2
         self._num_bands: int = 1
-        self._global_ratio: float = 0.0  # Ratio of global neurons
         self._position_init: PositionInitializer = LatticePositionInitializer()
-        self._connection_init: ConnectionInitializer | None = None
+        self._connection_inits: list[ConnectionInitializer] = []
         self._seed: int | None = None
     
     def with_neurons(self, count: int) -> Self:
@@ -51,19 +55,17 @@ class NetworkBuilder:
         self._num_bands = num_bands
         return self
     
-    def with_global_ratio(self, ratio: float) -> Self:
-        """Set the ratio of global vs local neurons (0 to 1)."""
-        self._global_ratio = np.clip(ratio, 0.0, 1.0)
-        return self
-    
     def with_position_initializer(self, init: PositionInitializer) -> Self:
         """Set the position initialization strategy."""
         self._position_init = init
         return self
     
     def with_connection_initializer(self, init: ConnectionInitializer) -> Self:
-        """Set the connection initialization strategy."""
-        self._connection_init = init
+        """Add a connection initialization strategy.
+
+        Multiple initializers can be added and will be applied in order.
+        """
+        self._connection_inits.append(init)
         return self
     
     def with_seed(self, seed: int) -> Self:
@@ -84,18 +86,11 @@ class NetworkBuilder:
             self._num_neurons, self._dimensions
         )
         
-        # Determine which neurons are global
-        num_global = int(self._global_ratio * self._num_neurons)
-        global_indices = set(
-            rng.choice(self._num_neurons, size=num_global, replace=False)
-        )
-        
         # Create neurons
         neurons = []
         for i, pos in enumerate(positions):
             neuron = Neuron(
                 position=pos,
-                is_global=(i in global_indices),
                 num_bands=self._num_bands,
             )
             neurons.append(neuron)
@@ -103,8 +98,8 @@ class NetworkBuilder:
         # Create network
         network = LatticeNetwork(neurons=neurons, num_bands=self._num_bands)
         
-        # Initialize connections
-        if self._connection_init is not None:
-            self._connection_init.initialize(network)
-        
+        # Initialize connections (apply all initializers in order)
+        for connection_init in self._connection_inits:
+            connection_init.initialize(network)
+
         return network

@@ -15,6 +15,8 @@ from plsn.init.distributions import (
 from plsn.init.connections import (
     ConnectionInitializer,
     DistanceBasedInitializer,
+    FullyConnectedInitializer,
+    GlobalInitializer,
 )
 
 __all__ = [
@@ -28,4 +30,6 @@ __all__ = [
     "StepDistribution",
     "ConnectionInitializer",
     "DistanceBasedInitializer",
+    "FullyConnectedInitializer",
+    "GlobalInitializer",
 ]

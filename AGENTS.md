@@ -8,7 +8,7 @@ See [README.md](./README.md) for full architecture documentation.
 
 **TL;DR:** This is a neural network library where neurons have spatial positions and connect based on distance. Key abstractions:
 
-- `Neuron` – position + bands + global/local marker
+- `Neuron` – position + bands
 - `LatticeNetwork` – neurons + N×N weight matrix (None = no connection)
 - `NetworkBuilder` – fluent API for construction
 - `PositionInitializer` / `DistanceDistribution` / `ConnectionInitializer` – protocols for extensibility

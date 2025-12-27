@@ -94,12 +94,12 @@ class DistanceBasedInitializer:
 
 class FullyConnectedInitializer:
     """Connect all neurons to all other neurons.
-    
+
     Args:
         initial_weight: Initial weight for all connections.
         self_connections: Whether neurons can connect to themselves.
     """
-    
+
     def __init__(
         self,
         initial_weight: float = 0.0,
@@ -107,7 +107,7 @@ class FullyConnectedInitializer:
     ) -> None:
         self.initial_weight = initial_weight
         self.self_connections = self_connections
-    
+
     def initialize(self, network: LatticeNetwork) -> None:
         """Create all possible connections."""
         n = network.num_neurons
@@ -116,3 +116,49 @@ class FullyConnectedInitializer:
                 if i == j and not self.self_connections:
                     continue
                 network.connect(i, j, self.initial_weight)
+
+
+class GlobalInitializer:
+    """Connect neurons with uniform probability regardless of distance.
+
+    This creates random "long-range" connections that ignore spatial structure,
+    useful for adding small-world properties to locally-connected networks.
+
+    Args:
+        probability: Probability of creating each possible connection.
+        initial_weight: Initial weight for created connections.
+        self_connections: Whether neurons can connect to themselves.
+        bidirectional: If True, connections are symmetric (i→j implies j→i).
+        seed: Random seed for reproducibility.
+    """
+
+    def __init__(
+        self,
+        probability: float = 0.01,
+        initial_weight: float = 0.0,
+        self_connections: bool = False,
+        bidirectional: bool = False,
+        seed: int | None = None,
+    ) -> None:
+        self.probability = probability
+        self.initial_weight = initial_weight
+        self.self_connections = self_connections
+        self.bidirectional = bidirectional
+        self.rng = np.random.default_rng(seed)
+
+    def initialize(self, network: LatticeNetwork) -> None:
+        """Create connections with uniform probability."""
+        n = network.num_neurons
+        if n == 0:
+            return
+
+        for i in range(n):
+            start_j = 0 if self.bidirectional else i
+            for j in range(start_j, n):
+                if i == j and not self.self_connections:
+                    continue
+
+                if self.rng.random() < self.probability:
+                    network.connect(i, j, self.initial_weight)
+                    if self.bidirectional and i != j:
+                        network.connect(j, i, self.initial_weight)

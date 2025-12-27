@@ -8,15 +8,10 @@ A modular neural network architecture where neurons have **spatial positions** a
 
 | Concept | Description |
 |---------|-------------|
-| **Neuron** | Has a d-dimensional position, global/local marker, and B bands |
+| **Neuron** | Has a d-dimensional position and B bands |
 | **Bands** | Separate signal channels that mix only within each neuron via a B×B weight matrix |
 | **Weights** | N×N matrix where `None` = no connection (immutable), `float` = adjustable weight |
 | **Distance-based connectivity** | Neurons connect probabilistically based on L1 (Manhattan) distance |
-
-### Neuron Types
-
-- **Local neurons** – Standard neurons with position-based connectivity
-- **Global neurons** – Can be used for long-range connections (marked via `is_global` flag)
 
 ### Band Processing
 
@@ -97,7 +92,7 @@ plsn/
 ├── __init__.py           # Main exports
 ├── builder.py            # Fluent NetworkBuilder API
 ├── core/
-│   ├── neuron.py         # Neuron with position, bands, global/local
+│   ├── neuron.py         # Neuron with position, bands
 │   └── network.py        # LatticeNetwork with N×N weight matrix
 └── init/
     ├── positions.py      # Position initializers

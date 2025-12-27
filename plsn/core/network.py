@@ -51,6 +51,22 @@ class LatticeNetwork:
             return 0
         return self.neurons[0].dimensions
     
+    def ensure_weights_lil(self) -> None:
+        """Convert weights to LIL format if not already LIL.
+        
+        LIL format is efficient for element-wise assignments and modifications.
+        """
+        if not isinstance(self.weights, lil_array):
+            self.weights = self.weights.tolil()
+    
+    def ensure_weights_csr(self) -> None:
+        """Convert weights to CSR format if not already CSR.
+        
+        CSR format is efficient for matrix operations and computations.
+        """
+        if not isinstance(self.weights, csr_array):
+            self.weights = self.weights.tocsr()
+    
     def connect(self, from_idx: int, to_idx: int, weight: float = 0.0) -> None:
         """Create a connection between two neurons.
 
@@ -59,11 +75,13 @@ class LatticeNetwork:
             to_idx: Index of target neuron.
             weight: Initial connection weight.
         """
+        self.ensure_weights_lil()
         self.connections[from_idx, to_idx] = True
         self.weights[from_idx, to_idx] = weight
 
     def disconnect(self, from_idx: int, to_idx: int) -> None:
         """Remove connection between two neurons."""
+        self.ensure_weights_lil()
         # Remove from connections matrix
         row = self.connections.rows[from_idx]
         data = self.connections.data[from_idx]
@@ -147,17 +165,23 @@ class LatticeNetwork:
         if inputs.shape != (n, b):
             raise ValueError(f"Expected input shape ({n}, {b}), got {inputs.shape}")
 
-        # Convert to CSR for efficient matrix multiplication
+        # Ensure CSR format for efficient matrix multiplication
         # weights is (n, n), inputs is (n, b)
         # We need weights.T @ inputs for each neuron j to get weighted sum of inputs
-        weights_csr = csr_array(self.weights)
-        weighted_inputs = weights_csr.T @ inputs  # (n, b)
+        self.ensure_weights_csr()
+        weighted_inputs = self.weights.T @ inputs  # (n, b)
 
-        outputs = np.zeros((n, b), dtype=np.float32)
-        for j, neuron in enumerate(self.neurons):
-            # Mix bands within the neuron
-            outputs[j] = neuron.process_bands(weighted_inputs[j])
+        # Vectorized per-neuron band mixing:
+        # Each neuron has a (b, b) band mixing matrix. Stack into (n, b, b) and
+        # apply batched matmul to avoid a Python loop over neurons.
+        band_weights = np.stack(
+            [neuron.band_weights for neuron in self.neurons],
+            axis=0,
+        ).astype(np.float32, copy=False)  # (n, b, b)
 
+        outputs = np.einsum("nij,nj->ni", band_weights, weighted_inputs).astype(
+            np.float32, copy=False
+        )
         return outputs
     
     def __iter__(self) -> Iterator[Neuron]:

@@ -17,6 +17,9 @@ def _forward_reference(net) -> np.ndarray:
     for j, neuron in enumerate(net.neurons):
         out[j] = neuron.process_bands(weighted_inputs[j])
     
+    # helper to match default relu activation
+    np.maximum(out, 0, out=out)
+    
     if net.num_inputs > 0:
         out[net.ranges.input_slice] = net.state[net.ranges.input_slice]
     

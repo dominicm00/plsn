@@ -1,7 +1,7 @@
 """NetworkBuilder - fluent API for constructing lattice networks."""
 
 from dataclasses import dataclass, field
-from typing import Self
+from typing import Self, Callable
 
 import numpy as np
 
@@ -70,6 +70,7 @@ class NetworkBuilder:
         self._input_config: LayerConfig | None = None
         self._output_config: LayerConfig | None = None
         self._seed: int | None = None
+        self._activation: Callable[[np.float32], np.float32] | None = None
     
     def with_dimensions(self, dims: int) -> Self:
         """Set the dimensionality of the neuron position space."""
@@ -151,6 +152,18 @@ class NetworkBuilder:
         """Set random seed for reproducibility."""
         self._seed = seed
         return self
+
+    def with_activation(
+        self, activation: Callable[[np.float32], np.float32]
+    ) -> Self:
+        """Set the activation function for the network.
+        
+        Args:
+            activation: A callable that takes a float and returns a float.
+                       The network will map this function over the state element-wise.
+        """
+        self._activation = activation
+        return self
     
     def build(self) -> LatticeNetwork:
         """Construct the network with all configured parameters.
@@ -208,6 +221,7 @@ class NetworkBuilder:
             neurons=neurons,
             num_bands=self._num_bands,
             ranges=ranges,
+            activation=self._activation,
         )
 
         # Model-to-model connections

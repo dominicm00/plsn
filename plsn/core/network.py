@@ -1,12 +1,21 @@
 """LatticeNetwork class - collection of neurons with weighted connections."""
 
 from dataclasses import dataclass, field
-from typing import Iterator
+from typing import Iterator, Callable
+
 
 import numpy as np
 from scipy.sparse import lil_array, csr_array
 
 from plsn.core.neuron import Neuron
+
+
+
+
+
+def relu(x: np.float32) -> np.float32:
+    """ReLU activation function."""
+    return np.maximum(0.0, x)
 
 
 @dataclass
@@ -105,9 +114,12 @@ class LatticeNetwork:
     input_values: np.ndarray = field(init=False)
     num_bands: int = 1
     ranges: NeuronRanges = field(default_factory=lambda: NeuronRanges(0, 0, 0, 0))
+    activation: "Callable[[float], float]" = field(default=relu)
 
     def __post_init__(self) -> None:
         """Initialize empty sparse matrices, state, and output weights."""
+        self.activation = np.vectorize(self.activation, otypes=[np.float32])
+
         n = len(self.neurons)
         self.connections = lil_array((n, n), dtype=np.bool_)
         self.weights = lil_array((n, n), dtype=np.float32)
@@ -292,6 +304,9 @@ class LatticeNetwork:
         self.state = np.einsum("nij,nj->ni", band_weights, weighted_inputs).astype(
             np.float32, copy=False
         )
+
+        # Apply activation function
+        self.state = self.activation(self.state)
 
         # Set input state from stored values
         self._sync_input_state()

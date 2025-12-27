@@ -75,17 +75,18 @@ class NetworkBuilder:
     
     def build(self) -> LatticeNetwork:
         """Construct the network with all configured parameters.
-        
+
         Returns:
             A fully initialized LatticeNetwork.
         """
         rng = np.random.default_rng(self._seed)
-        
-        # Generate positions
+
+        # Spawn child RNG for position initializer
+        pos_rng = rng.spawn(1)[0]
         positions = self._position_init.initialize(
-            self._num_neurons, self._dimensions
+            self._num_neurons, self._dimensions, pos_rng
         )
-        
+
         # Create neurons
         neurons = []
         for i, pos in enumerate(positions):
@@ -94,12 +95,13 @@ class NetworkBuilder:
                 num_bands=self._num_bands,
             )
             neurons.append(neuron)
-        
+
         # Create network
         network = LatticeNetwork(neurons=neurons, num_bands=self._num_bands)
-        
-        # Initialize connections (apply all initializers in order)
-        for connection_init in self._connection_inits:
-            connection_init.initialize(network)
+
+        # Spawn child RNGs for connection initializers
+        conn_rngs = rng.spawn(len(self._connection_inits))
+        for connection_init, conn_rng in zip(self._connection_inits, conn_rngs):
+            connection_init.initialize(network, conn_rng)
 
         return network

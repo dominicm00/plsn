@@ -9,14 +9,17 @@ import numpy as np
 @runtime_checkable
 class PositionInitializer(Protocol):
     """Protocol for position initialization strategies."""
-    
-    def initialize(self, num_neurons: int, dimensions: int) -> np.ndarray:
+
+    def initialize(
+        self, num_neurons: int, dimensions: int, rng: np.random.Generator
+    ) -> np.ndarray:
         """Generate positions for neurons.
-        
+
         Args:
             num_neurons: Number of neurons to place.
             dimensions: Dimensionality of the space.
-            
+            rng: Random number generator to use for stochastic initialization.
+
         Returns:
             Array of shape (num_neurons, dimensions) with positions.
         """
@@ -42,13 +45,16 @@ class LatticePositionInitializer:
     def __init__(self, spacing: float = 1.0) -> None:
         self.spacing = spacing
     
-    def initialize(self, num_neurons: int, dimensions: int) -> np.ndarray:
+    def initialize(
+        self, num_neurons: int, dimensions: int, rng: np.random.Generator
+    ) -> np.ndarray:
         """Generate lattice positions.
-        
+
         Args:
             num_neurons: Number of neurons to place.
             dimensions: Dimensionality of the space.
-            
+            rng: Random number generator (unused, lattice is deterministic).
+
         Returns:
             Array of shape (num_neurons, dimensions) with positions.
         """
@@ -71,37 +77,37 @@ class LatticePositionInitializer:
 
 class RandomPositionInitializer:
     """Initialize neurons at random positions.
-    
+
     Positions are uniformly distributed within a hypercube. By default,
     the size of the hypercube is computed to achieve approximately unit
     density (neurons ~1 unit apart on average), matching the behavior
     of LatticePositionInitializer.
-    
+
     Args:
         low: Lower bound for each dimension. Default: 0.0
         size: Size of the hypercube in each dimension. If None (default),
               computed automatically to achieve ~1 unit spacing between
               neurons on average.
-        seed: Random seed for reproducibility.
     """
-    
+
     def __init__(
         self,
         low: float = 0.0,
         size: float | None = None,
-        seed: int | None = None,
     ) -> None:
         self.low = low
         self.size = size  # None means auto-compute based on num_neurons
-        self.rng = np.random.default_rng(seed)
-    
-    def initialize(self, num_neurons: int, dimensions: int) -> np.ndarray:
+
+    def initialize(
+        self, num_neurons: int, dimensions: int, rng: np.random.Generator
+    ) -> np.ndarray:
         """Generate random positions.
-        
+
         Args:
             num_neurons: Number of neurons to place.
             dimensions: Dimensionality of the space.
-            
+            rng: Random number generator to use.
+
         Returns:
             Array of shape (num_neurons, dimensions) with positions.
         """
@@ -114,7 +120,7 @@ class RandomPositionInitializer:
             # to match a lattice with spacing=1.0
             points_per_dim = int(np.ceil(num_neurons ** (1 / dimensions)))
             size = max(points_per_dim - 1, 1)
-        
-        return self.rng.uniform(
+
+        return rng.uniform(
             self.low, self.low + size, size=(num_neurons, dimensions)
         ).astype(np.float32)

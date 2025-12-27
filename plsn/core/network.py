@@ -82,20 +82,8 @@ class LatticeNetwork:
     def disconnect(self, from_idx: int, to_idx: int) -> None:
         """Remove connection between two neurons."""
         self.ensure_weights_lil()
-        # Remove from connections matrix
-        row = self.connections.rows[from_idx]
-        data = self.connections.data[from_idx]
-        if to_idx in row:
-            idx = row.index(to_idx)
-            row.pop(idx)
-            data.pop(idx)
-        # Remove from weights matrix
-        row = self.weights.rows[from_idx]
-        data = self.weights.data[from_idx]
-        if to_idx in row:
-            idx = row.index(to_idx)
-            row.pop(idx)
-            data.pop(idx)
+        self.connections[from_idx, to_idx] = False
+        self.weights[from_idx, to_idx] = 0.0
 
     def is_connected(self, from_idx: int, to_idx: int) -> bool:
         """Check if two neurons are connected."""

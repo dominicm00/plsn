@@ -10,6 +10,50 @@ from plsn.core.neuron import Neuron
 
 
 @dataclass
+class NeuronRanges:
+    """Index ranges for different neuron types in the network.
+    
+    Attributes:
+        input_start: Start index of input neurons (inclusive).
+        input_end: End index of input neurons (exclusive).
+        model_start: Start index of model neurons (inclusive).
+        model_end: End index of model neurons (exclusive).
+    """
+    input_start: int
+    input_end: int
+    model_start: int
+    model_end: int
+    
+    @property
+    def input_slice(self) -> slice:
+        """Slice for input neurons."""
+        return slice(self.input_start, self.input_end)
+
+    @property
+    def input_range(self) -> range:
+        """Range for input neurons."""
+        return range(self.input_start, self.input_end)
+    
+    @property
+    def model_slice(self) -> slice:
+        """Slice for model neurons."""
+        return slice(self.model_start, self.model_end)
+
+    @property
+    def model_range(self) -> range:
+        """Range for model neurons."""
+        return range(self.model_start, self.model_end)
+    
+    @property
+    def num_inputs(self) -> int:
+        return self.input_end - self.input_start
+    
+    @property
+    def num_model(self) -> int:
+        return self.model_end - self.model_start
+
+
+@dataclass
 class LatticeNetwork:
     """A network of neurons connected via a weight matrix.
 
@@ -22,22 +66,40 @@ class LatticeNetwork:
 
     This allows zero-weight connections that can still be updated during learning.
 
+    State is stored internally. Input neurons can have their state set via
+    set_input(). The forward() method updates state in-place.
+
     Attributes:
         neurons: List of neurons in the network.
         connections: N×N sparse boolean matrix (True = connection exists).
         weights: N×N sparse float matrix (connection weights).
         num_bands: Number of bands per neuron.
+        ranges: Index ranges for input and model neurons.
+        state: (num_neurons, num_bands) array of neuron activations.
     """
     neurons: list[Neuron] = field(default_factory=list)
     connections: lil_array = field(init=False)
     weights: lil_array = field(init=False)
     num_bands: int = 1
+    ranges: NeuronRanges = field(default_factory=lambda: NeuronRanges(0, 0, 0, 0))
 
     def __post_init__(self) -> None:
-        """Initialize empty sparse matrices."""
+        """Initialize empty sparse matrices and state."""
         n = len(self.neurons)
         self.connections = lil_array((n, n), dtype=np.bool_)
         self.weights = lil_array((n, n), dtype=np.float32)
+        self.state = np.zeros((n, self.num_bands), dtype=np.float32)
+        if self.ranges.model_end == 0 and n > 0:
+            self.ranges = NeuronRanges(0, 0, 0, n)
+        
+        assert self.ranges.input_start >= 0, "input_start must be non-negative"
+        assert self.ranges.model_start >= 0, "model_start must be non-negative"
+        assert self.ranges.num_inputs + self.ranges.num_model == n, "total number of neurons must match"
+    
+    @property
+    def num_inputs(self) -> int:
+        """Number of input neurons (for backwards compatibility)."""
+        return self.ranges.num_inputs
     
     @property
     def num_neurons(self) -> int:
@@ -74,7 +136,14 @@ class LatticeNetwork:
             from_idx: Index of source neuron.
             to_idx: Index of target neuron.
             weight: Initial connection weight.
+        
+        Raises:
+            AssertionError: If to_idx targets an input neuron.
         """
+        assert not (self.ranges.input_start <= to_idx < self.ranges.input_end), (
+            f"Cannot connect to input neuron {to_idx}. "
+            f"Input neurons are in range [{self.ranges.input_start}, {self.ranges.input_end})"
+        )
         self.ensure_weights_lil()
         self.connections[from_idx, to_idx] = True
         self.weights[from_idx, to_idx] = weight
@@ -117,6 +186,25 @@ class LatticeNetwork:
         """Count total number of connections in the network."""
         return self.connections.nnz
     
+    def set_input(self, values: np.ndarray) -> None:
+        """Set state for input neurons.
+
+        The input values are replicated across all bands for each input neuron.
+
+        Args:
+            values: Array of shape (num_inputs,) with one value per input neuron.
+
+        Raises:
+            ValueError: If values shape doesn't match num_inputs.
+        """
+        if values.shape != (self.num_inputs,):
+            raise ValueError(
+                f"Expected input shape ({self.num_inputs},), got {values.shape}"
+            )
+        self.state[self.ranges.input_slice] = np.tile(
+            values[:, np.newaxis], (1, self.num_bands)
+        ).astype(np.float32, copy=False)
+    
     def max_distance(self, ord: int = 1) -> float:
         """Compute maximum pairwise distance between any two neurons.
         
@@ -134,44 +222,28 @@ class LatticeNetwork:
                     max_dist = dist
         return max_dist
     
-    def forward(self, inputs: np.ndarray) -> np.ndarray:
+    def forward(self) -> None:
         """Forward pass through the network.
 
-        Args:
-            inputs: Array of shape (num_neurons, num_bands) with input per neuron/band.
-
-        Returns:
-            Array of shape (num_neurons, num_bands) with output signals.
+        Updates the internal state in-place. Input neuron state is preserved
+        (not overwritten by incoming connections).
 
         Note:
             This is a single-step forward pass. For recurrent processing,
             call this method multiple times.
         """
-        n = self.num_neurons
-        b = self.num_bands
-
-        if inputs.shape != (n, b):
-            raise ValueError(f"Expected input shape ({n}, {b}), got {inputs.shape}")
-
-        # Ensure CSR format for efficient matrix multiplication
-        # weights is (n, n), inputs is (n, b)
-        # We need weights.T @ inputs for each neuron j to get weighted sum of inputs
         self.ensure_weights_csr()
-        weighted_inputs = self.weights.T @ inputs  # (n, b)
+        weighted_inputs = self.weights.T @ self.state  # (n, b)
 
-        # Vectorized per-neuron band mixing:
-        # Each neuron has a (b, b) band mixing matrix. Stack into (n, b, b) and
-        # apply batched matmul to avoid a Python loop over neurons.
         band_weights = np.stack(
             [neuron.band_weights for neuron in self.neurons],
             axis=0,
         ).astype(np.float32, copy=False)  # (n, b, b)
 
-        outputs = np.einsum("nij,nj->ni", band_weights, weighted_inputs).astype(
+        self.state = np.einsum("nij,nj->ni", band_weights, weighted_inputs).astype(
             np.float32, copy=False
         )
-        return outputs
-    
+
     def __iter__(self) -> Iterator[Neuron]:
         """Iterate over neurons."""
         return iter(self.neurons)

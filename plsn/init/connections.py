@@ -15,9 +15,20 @@ from plsn.init.distributions import (
 
 @runtime_checkable
 class ConnectionInitializer(Protocol):
-    """Protocol for connection initialization strategies."""
+    """Protocol for connection initialization strategies.
+    
+    Connection initializers receive source and target neuron ranges to control
+    which neurons to connect. This allows the same initializer to be used for
+    input->model, model->model, or any custom connectivity pattern.
+    """
 
-    def initialize(self, network: LatticeNetwork, rng: np.random.Generator) -> None:
+    def initialize(
+        self,
+        network: LatticeNetwork,
+        rng: np.random.Generator,
+        source_range: range,
+        target_range: range,
+    ) -> None:
         """Initialize connections in the network.
 
         This method modifies the network's weight matrix in-place,
@@ -26,6 +37,8 @@ class ConnectionInitializer(Protocol):
         Args:
             network: The network to initialize connections for.
             rng: Random number generator to use for stochastic initialization.
+            source_range: Range of source neurons (connections go FROM these).
+            target_range: Range of target neurons (connections go TO these).
         """
         ...
 
@@ -59,34 +72,33 @@ class DistanceBasedInitializer:
         self.bidirectional = bidirectional
         self.ord = ord
 
-    def initialize(self, network: LatticeNetwork, rng: np.random.Generator) -> None:
+    def initialize(
+        self,
+        network: LatticeNetwork,
+        rng: np.random.Generator,
+        source_range: range,
+        target_range: range,
+    ) -> None:
         """Create connections based on distance probabilities.
 
-        For each pair of neurons, computes the probability of connection
-        based on their distance, then randomly creates the connection
-        with that probability.
+        Connects neurons from source_range to target_range based on distance.
 
         Note: Distances are passed directly to the distribution (not normalized).
         With the default positioning where neurons are ~1 unit apart, distribution
         parameters (like sigma) represent absolute distances.
         """
-        n = network.num_neurons
-        if n == 0:
+        if network.num_neurons == 0:
             return
 
-        # For each pair, compute probability and potentially connect
-        for i in range(n):
-            start_j = 0 if self.bidirectional else i
-            for j in range(start_j, n):
+        for i in source_range:
+            for j in target_range:
                 if i == j and not self.self_connections:
                     continue
 
-                # Compute distance (not normalized - distributions work with absolute distances)
                 dist = network.neurons[i].distance_to(
                     network.neurons[j], ord=self.ord
                 )
 
-                # Get probability and roll the dice
                 prob = self.distribution.probability(dist)
 
                 if rng.random() < prob:
@@ -96,7 +108,7 @@ class DistanceBasedInitializer:
 
 
 class FullyConnectedInitializer:
-    """Connect all neurons to all other neurons.
+    """Connect all source neurons to all target neurons.
 
     Args:
         initial_weight: Initial weight for all connections.
@@ -111,11 +123,16 @@ class FullyConnectedInitializer:
         self.initial_weight = initial_weight
         self.self_connections = self_connections
 
-    def initialize(self, network: LatticeNetwork, rng: np.random.Generator) -> None:
-        """Create all possible connections."""
-        n = network.num_neurons
-        for i in range(n):
-            for j in range(n):
+    def initialize(
+        self,
+        network: LatticeNetwork,
+        rng: np.random.Generator,
+        source_range: range,
+        target_range: range,
+    ) -> None:
+        """Create all possible connections from source to target range."""
+        for i in source_range:
+            for j in target_range:
                 if i == j and not self.self_connections:
                     continue
                 network.connect(i, j, self.initial_weight)
@@ -146,15 +163,19 @@ class GlobalInitializer:
         self.self_connections = self_connections
         self.bidirectional = bidirectional
 
-    def initialize(self, network: LatticeNetwork, rng: np.random.Generator) -> None:
-        """Create connections with uniform probability."""
-        n = network.num_neurons
-        if n == 0:
+    def initialize(
+        self,
+        network: LatticeNetwork,
+        rng: np.random.Generator,
+        source_range: range,
+        target_range: range,
+    ) -> None:
+        """Create connections with uniform probability from source to target."""
+        if network.num_neurons == 0:
             return
 
-        for i in range(n):
-            start_j = 0 if self.bidirectional else i
-            for j in range(start_j, n):
+        for i in source_range:
+            for j in target_range:
                 if i == j and not self.self_connections:
                     continue
 
@@ -180,17 +201,21 @@ class WeightInitializer:
     ) -> None:
         self.distribution = distribution or ConstantWeightDistribution(1.0)
 
-    def initialize(self, network: LatticeNetwork, rng: np.random.Generator) -> None:
-        """Initialize weights for existing connections."""
+    def initialize(
+        self,
+        network: LatticeNetwork,
+        rng: np.random.Generator,
+        source_range: range,
+        target_range: range,
+    ) -> None:
+        """Initialize weights for existing connections within the given ranges."""
         if network.num_neurons == 0:
             return
 
-        # Iterate over all existing connections
         rows = network.connections.rows
-        for i, cols in enumerate(rows):
-            for j in cols:
-                # Sample weight and assign
-                # Note: modifying lil_array this way is efficient enough for this purpose
-                weight = self.distribution.sample(rng)
-                network.weights[i, j] = weight
+        for i in source_range:
+            for j in rows[i]:
+                if j in target_range:
+                    weight = self.distribution.sample(rng)
+                    network.weights[i, j] = weight
 

@@ -22,7 +22,7 @@ class NetworkBuilder:
             .with_bands(4)
             .with_position_initializer(LatticePositionInitializer())
             .with_connection_initializer(
-                DistanceBasedInitializer(LinearDistribution())
+                DistanceBasedInitializer(LinearDistanceDistribution())
             )
             .with_connection_initializer(
                 GlobalInitializer(probability=0.01)

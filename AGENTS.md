@@ -13,26 +13,9 @@ See [README.md](./README.md) for full architecture documentation.
 - `NetworkBuilder` – fluent API for construction
 - `PositionInitializer` / `DistanceDistribution` / `ConnectionInitializer` – protocols for extensibility
 
-## Key Design Decisions
+## Development
 
-1. **`None` vs `0` weights** – `None` means no connection exists (cannot be learned). `0.0` means connection exists but has zero weight (can be adjusted during training).
-
-2. **Bands are separate between neurons** – When aggregating inputs, each band sums only from the same band of connected neurons. Mixing happens inside each neuron via a B×B matrix.
-
-3. **L1 (Manhattan) distance by default** – Configurable via `ord` parameter.
-
-## Development Commands
-
-```bash
-# Install dependencies
-uv sync
-
-# Run tests
-uv run pytest tests/ -v
-
-# Start Jupyter
-uv run jupyter lab
-```
+Use `uv` or the uv-generated `.venv` to run code.
 
 ## Code Locations
 

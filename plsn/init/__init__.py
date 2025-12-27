@@ -5,31 +5,21 @@ from plsn.init.positions import (
     LatticePositionInitializer,
     RandomPositionInitializer,
 )
-from plsn.init.distributions import (
-    DistanceDistribution,
-    LinearDistribution,
-    ExponentialDistribution,
-    GaussianDistribution,
-    StepDistribution,
-)
 from plsn.init.connections import (
     ConnectionInitializer,
     DistanceBasedInitializer,
     FullyConnectedInitializer,
     GlobalInitializer,
+    WeightInitializer,
 )
 
 __all__ = [
     "PositionInitializer",
     "LatticePositionInitializer",
     "RandomPositionInitializer",
-    "DistanceDistribution",
-    "LinearDistribution",
-    "ExponentialDistribution",
-    "GaussianDistribution",
-    "StepDistribution",
     "ConnectionInitializer",
     "DistanceBasedInitializer",
     "FullyConnectedInitializer",
     "GlobalInitializer",
+    "WeightInitializer",
 ]

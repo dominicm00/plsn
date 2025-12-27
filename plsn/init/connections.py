@@ -5,7 +5,12 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 
 from plsn.core.network import LatticeNetwork
-from plsn.init.distributions import DistanceDistribution, LinearDistribution
+from plsn.init.distributions import (
+    DistanceDistribution,
+    LinearDistanceDistribution,
+    WeightDistribution,
+    ConstantWeightDistribution,
+)
 
 
 @runtime_checkable
@@ -49,7 +54,7 @@ class DistanceBasedInitializer:
         ord: int = 1,
         seed: int | None = None,
     ) -> None:
-        self.distribution = distribution or LinearDistribution()
+        self.distribution = distribution or LinearDistanceDistribution()
         self.initial_weight = initial_weight
         self.self_connections = self_connections
         self.bidirectional = bidirectional
@@ -162,3 +167,38 @@ class GlobalInitializer:
                     network.connect(i, j, self.initial_weight)
                     if self.bidirectional and i != j:
                         network.connect(j, i, self.initial_weight)
+
+
+class WeightInitializer:
+    """Initialize weights of existing connections.
+    
+    Iterates through all existing connections in the network and sets their
+    weights by sampling from the provided WeightDistribution.
+    
+    Args:
+        distribution: Distribution to sample weights from.
+        seed: Random seed for reproducibility.
+    """
+    
+    def __init__(
+        self,
+        distribution: WeightDistribution | None = None,
+        seed: int | None = None,
+    ) -> None:
+        self.distribution = distribution or ConstantWeightDistribution(1.0)
+        self.rng = np.random.default_rng(seed)
+        
+    def initialize(self, network: LatticeNetwork) -> None:
+        """Initialize weights for existing connections."""
+        if network.num_neurons == 0:
+            return
+            
+        # Iterate over all existing connections
+        rows = network.connections.rows
+        for i, cols in enumerate(rows):
+            for j in cols:
+                # Sample weight and assign
+                # Note: modifying lil_array this way is efficient enough for this purpose
+                weight = self.distribution.sample(self.rng)
+                network.weights[i, j] = weight
+

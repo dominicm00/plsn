@@ -123,6 +123,9 @@ class LatticeNetwork:
     learning_config: HebbianConfig | None = None
     learning_enabled: bool = False
     bcm_theta: np.ndarray = field(init=False)
+    _pre_state: np.ndarray = field(init=False)
+    _post_state: np.ndarray = field(init=False)
+    _weighted_inputs: np.ndarray = field(init=False)
 
     def __post_init__(self) -> None:
         """Initialize empty sparse matrices, state, and output weights."""
@@ -162,6 +165,11 @@ class LatticeNetwork:
             )
         else:
             self.bcm_theta = np.zeros(n, dtype=np.float32)
+
+        # Initialize learning state buffers
+        self._pre_state = np.zeros((n, self.num_bands), dtype=np.float32)
+        self._post_state = np.zeros((n, self.num_bands), dtype=np.float32)
+        self._weighted_inputs = np.zeros((n, self.num_bands), dtype=np.float32)
 
     @property
     def num_inputs(self) -> int:
@@ -308,21 +316,25 @@ class LatticeNetwork:
         pre_state: np.ndarray,
         post_state: np.ndarray,
         weighted_inputs: np.ndarray,
+        reward: float = 1.0,
     ) -> None:
         """Apply Oja-BCM Hebbian learning to connection weights and band weights.
 
-        Combined rule: dw = eta * y * (y - theta) * (x - y * w)
+        Combined rule: dw = eta * reward * y * (y - theta) * (x - y * w)
 
         Where:
             - y: postsynaptic (output) activation
             - x: presynaptic (input) activation
             - theta: BCM sliding threshold
             - w: current weight
+            - reward: scalar that scales learning (negative = depression)
 
         Args:
             pre_state: Neuron state before forward pass, shape (num_neurons, num_bands).
             post_state: Neuron state after activation, shape (num_neurons, num_bands).
             weighted_inputs: Input to band mixing, shape (num_neurons, num_bands).
+            reward: Scalar reward signal that scales learning. Positive values
+                strengthen learning, negative values cause depression (anti-learning).
         """
         if self.learning_config is None:
             return
@@ -342,8 +354,7 @@ class LatticeNetwork:
         y = y_avg.astype(np.float32)  # (n,)
         bcm_term = y - self.bcm_theta  # (n,)
 
-        # Convert to CSR then COO for efficient updates
-        self.ensure_weights_csr()
+        # Convert to COO for efficient updates
         coo = self.weights.tocoo()
         rows, cols, data = coo.row, coo.col, coo.data.copy()
 
@@ -357,9 +368,9 @@ class LatticeNetwork:
             x_j = x[j]
             bcm_i = bcm_term[i]
 
-            # Oja-BCM: dw = eta * y_i * bcm_i * (x_j - y_i * w)
+            # Oja-BCM: dw = eta * reward * y_i * bcm_i * (x_j - y_i * w)
             oja_term = x_j - y_i * w
-            dw = cfg.learning_rate * y_i * bcm_i * oja_term
+            dw = cfg.learning_rate * reward * y_i * bcm_i * oja_term
 
             # Weight decay
             if cfg.weight_decay > 0:
@@ -396,9 +407,9 @@ class LatticeNetwork:
         bcm_exp = bcm[:, :, None]  # (N', B, 1)
         x_exp = x_bands[:, None, :]  # (N', 1, B)
 
-        # Oja-BCM rule: dw = eta * y * bcm * (x - y * w)
+        # Oja-BCM rule: dw = eta * reward * y * bcm * (x - y * w)
         oja_term = x_exp - y_exp * w  # (N', B, B)
-        dw = cfg.band_learning_rate * y_exp * bcm_exp * oja_term
+        dw = cfg.band_learning_rate * reward * y_exp * bcm_exp * oja_term
 
         # Weight decay
         if cfg.weight_decay > 0:
@@ -413,8 +424,8 @@ class LatticeNetwork:
         """Forward pass through the network.
 
         Updates the internal state in-place. Input neuron state is set
-        based on stored input_values. If learning is enabled, applies
-        Oja-BCM Hebbian learning to connection weights and band weights.
+        based on stored input_values. If learning is enabled, stores
+        state information for later use by reward().
 
         Returns:
             Output vector of shape (num_outputs,) with mixed band values for
@@ -422,11 +433,12 @@ class LatticeNetwork:
 
         Note:
             This is a single-step forward pass. For recurrent processing,
-            call this method multiple times.
+            call this method multiple times. To apply learning, call
+            reward() after forward() with a reward signal.
         """
         # Store pre-activation state for learning
         if self.learning_enabled and self.learning_config is not None:
-            pre_state = self.state.copy()
+            self._pre_state = self.state.copy()
 
         self.ensure_weights_csr()
         weighted_inputs = self.weights.T @ self.state  # (n, b)
@@ -441,14 +453,41 @@ class LatticeNetwork:
         # Set input state from stored values
         self._sync_input_state()
 
-        # Apply Hebbian learning if enabled
+        # Store post-activation state and weighted inputs for learning
         if self.learning_enabled and self.learning_config is not None:
-            self._apply_hebbian_learning(pre_state, self.state, weighted_inputs)
+            self._post_state = self.state.copy()
+            self._weighted_inputs = weighted_inputs.copy()
 
         # Mix output neuron bands down to scalar outputs
         output_state = self.state[self.ranges.output_slice]  # (num_outputs, num_bands)
         output = (output_state * self.output_weights).sum(axis=1)  # (num_outputs,)
         return output.astype(np.float32, copy=False)
+
+    def reward(self, reward: float) -> None:
+        """Apply reward-modulated Hebbian learning based on the last forward pass.
+
+        This method should be called after forward() to apply learning scaled
+        by the reward signal. Positive rewards strengthen the learned associations,
+        while negative rewards cause depression (weakening of associations).
+
+        Args:
+            reward: Scalar reward signal. Positive values increase learning,
+                negative values cause depression (anti-learning), and zero
+                results in no weight changes.
+
+        Note:
+            This method has no effect if learning_enabled is False or if
+            learning_config is None.
+        """
+        if not self.learning_enabled or self.learning_config is None:
+            return
+
+        self._apply_hebbian_learning(
+            self._pre_state,
+            self._post_state,
+            self._weighted_inputs,
+            reward=reward,
+        )
 
     def __iter__(self) -> Iterator[Neuron]:
         """Iterate over neurons."""
